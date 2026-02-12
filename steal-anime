@@ -8,221 +8,237 @@ local localPlayer = Players.LocalPlayer
 local guiEnabled = true
 local connections = {}
 
--- Load Rayfield Library
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-local Window = Rayfield:CreateWindow({
-    Name = "Steal Anime OP",
-    LoadingTitle = "Loading Steal Tool",
-    LoadingSubtitle = "by Zero (OxyCoder)",
-    ConfigurationSaving = {
-        Enabled = false, -- No need for saving in this script
-    }
-})
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "PlayerBaseGUI"
+screenGui.ResetOnSpawn = false
 
--- Apply a dark theme to match your original UI
-Rayfield:SetTheme("Dark") -- Assuming Rayfield supports this; adjust if needed
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 300, 0, 350)
+mainFrame.Position = UDim2.new(0, 50, 0, 50)
+mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+mainFrame.BorderSizePixel = 0
+mainFrame.ClipsDescendants = false
 
--- Create the main tab
-local MainTab = Window:CreateTab("Main")
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = mainFrame
 
--- Dropdown for Bases
-local BasesDropdown = MainTab:CreateDropdown({
-    Name = "Select Base",
-    Options = {},
-    CurrentOption = "Select Base",
-    Callback = function(Option)
-        -- Find the selected base from your list
-        local bases = getAllPlayerBases()
-        for _, baseInfo in ipairs(bases) do
-            if baseInfo.PlayerName .. "'s Base" == Option then
-                selectedBase = baseInfo.Base
-                updateCharactersList() -- Refresh characters
-                CharsDropdown:Refresh({}, true) -- Clear Rayfield dropdown
-                local characters = getCharactersFromBase(selectedBase)
-                local charOptions = {}
-                for _, charInfo in ipairs(characters) do
-                    table.insert(charOptions, charInfo.Name .. " (" .. charInfo.Folder .. ")")
-                end
-                CharsDropdown:Refresh(charOptions, true)
-                break
-            end
-        end
-    end
-})
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1, 0, 0, 30)
+titleBar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+titleBar.BorderSizePixel = 0
 
--- Dropdown for Characters
-local CharsDropdown = MainTab:CreateDropdown({
-    Name = "Select Character",
-    Options = {},
-    CurrentOption = "Select Character",
-    Callback = function(Option)
-        if not selectedBase then return end
-        local characters = getCharactersFromBase(selectedBase)
-        for _, charInfo in ipairs(characters) do
-            if charInfo.Name .. " (" .. charInfo.Folder .. ")" == Option then
-                selectedCharacter = charInfo.Character
-                break
-            end
-        end
-    end
-})
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 8)
+titleCorner.Parent = titleBar
 
--- Steal Button
-local ActionButton = MainTab:CreateButton({
-    Name = "Steal",
-    Callback = function()
-        -- Your original action logic (unchanged)
-        if selectedBase and selectedCharacter then
-            print("Base:", selectedBase.Name)
-            print("Character:", selectedCharacter.Name)
-            
-            local localChar = localPlayer.Character
-            if not localChar then
-                localChar = localPlayer.CharacterAdded:Wait()
-            end
-            local localHum = localChar:WaitForChild("Humanoid")
-            local localHRP = localChar:WaitForChild("HumanoidRootPart")
-            
-            local targetHRP = selectedCharacter:FindFirstChild("HumanoidRootPart")
-            
-            if not targetHRP then
-                return
-            end
-            
-            local function enableNoclip()
-                local noclipConnection
-                noclipConnection = RunService.Stepped:Connect(function()
-                    if localChar and localHum then
-                        for _, part in pairs(localChar:GetDescendants()) do
-                            if part:IsA("BasePart") then
-                                part.CanCollide = false
-                            end
-                        end
-                    else
-                        noclipConnection:Disconnect()
-                    end
-                end)
-                return noclipConnection
-            end
-            
-            local function disableMovement()
-                localHum.PlatformStand = true
-            end
-            
-            local function enableFlying()
-                local bodyGyro = Instance.new("BodyGyro")
-                bodyGyro.MaxTorque = Vector3.new(400000, 400000, 400000)
-                bodyGyro.P = 10000
-                bodyGyro.D = 500
-                bodyGyro.CFrame = localHRP.CFrame
-                bodyGyro.Parent = localHRP
-                
-                local bodyVelocity = Instance.new("BodyVelocity")
-                bodyVelocity.Velocity = Vector3.new(0, 0, 0)
-                bodyVelocity.MaxForce = Vector3.new(400000, 400000, 400000)
-                bodyVelocity.Parent = localHRP
-                
-    
-                local flyConnection
-                flyConnection = RunService.Heartbeat:Connect(function()
-                    if localChar and localHRP then
-                        bodyVelocity.Velocity = Vector3.new(0, 0, 0)
-                        
-                        local lookAtTarget = CFrame.lookAt(localHRP.Position, targetHRP.Position)
-                        local rotatedCFrame = lookAtTarget * CFrame.Angles(math.rad(-90), 0, 0)
-                        bodyGyro.CFrame = rotatedCFrame
-                    else
-                        flyConnection:Disconnect()
-                    end
-                end)
-                
-                return bodyGyro, bodyVelocity, flyConnection
-            end
-            
-    
-            local function disableAll(bodyGyro, bodyVelocity, flyConnection, noclipConnection)
-                if bodyGyro then
-                    bodyGyro:Destroy()
-                end
-                if bodyVelocity then
-                    bodyVelocity:Destroy()
-                end
-                if flyConnection then
-                    flyConnection:Disconnect()
-                end
-                if noclipConnection then
-                    noclipConnection:Disconnect()
-                end
-                if localHum then
-                    localHum.PlatformStand = false
-                end
-    
-                if localChar then
-                    for _, part in pairs(localChar:GetDescendants()) do
-                        if part:IsA("BasePart") then
-                            part.CanCollide = true
-                        end
-                    end
-                end
-            end
-    
-            local function findLocalBase()
-                for baseName, base in pairs(workspace.Bases:GetChildren()) do
-                    local sign = base:FindFirstChild("Sign")
-                    if sign then
-                        local signPart = sign:FindFirstChild("SignPart")
-                        if signPart then
-                            local surfaceGui = signPart:FindFirstChild("SurfaceGui")
-                            if surfaceGui then
-                                local textLabel = surfaceGui:FindFirstChild("TextLabel")
-                                if textLabel and textLabel.Text then
-                                    if string.find(textLabel.Text, localPlayer.Name .. "'s Base") then
-                                        return base
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-                return nil
-            end
-            
-            local noclipConnection = enableNoclip()
-            disableMovement()
-            
-            local backOffset = targetHRP.CFrame.lookVector * -6
-            localHRP.CFrame = targetHRP.CFrame + backOffset + Vector3.new(0, 3, 0)
-            
-            local bodyGyro, bodyVelocity, flyConnection = enableFlying()
-            
-            local maxWaitTime = 6 
-            local startTime = tick()
-            
-            while tick() - startTime < maxWaitTime do
-               
-                if selectedCharacter:GetAttribute("Stolen") == true then
-                    break
-                end
-                wait(0.1)
-            end
-            
-            local localBase = findLocalBase()
-            if localBase and localBase:FindFirstChild("StealCollect2") then
-                local stealCollect = localBase.StealCollect2
-                if stealCollect:IsA("Part") then
-                    localHRP.CFrame = stealCollect.CFrame + Vector3.new(0, 3, 0)
-                end
-            end
-            
-            disableAll(bodyGyro, bodyVelocity, flyConnection, noclipConnection)
-            
-        else
-            print("Select an Base and Char")
-        end
-    end
-})
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Name = "TitleLabel"
+titleLabel.Size = UDim2.new(0.7, 0, 1, 0)
+titleLabel.Position = UDim2.new(0, 10, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "Steal Anime OP"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Font = Enum.Font.Gotham
+titleLabel.TextSize = 14
 
--- Your original functions (unchanged)
+local closeButton = Instance.new("TextButton")
+closeButton.Name = "CloseButton"
+closeButton.Size = UDim2.new(0, 30, 0, 30)
+closeButton.Position = UDim2.new(1, -30, 0, 0)
+closeButton.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+closeButton.BorderSizePixel = 0
+closeButton.Text = "X"
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.Font = Enum.Font.Gotham
+closeButton.TextSize = 14
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 8)
+closeCorner.Parent = closeButton
+
+local contentFrame = Instance.new("Frame")
+contentFrame.Name = "ContentFrame"
+contentFrame.Size = UDim2.new(1, -20, 1, -50)
+contentFrame.Position = UDim2.new(0, 10, 0, 40)
+contentFrame.BackgroundTransparency = 1
+contentFrame.ClipsDescendants = false
+
+local basesDropdown = Instance.new("Frame")
+basesDropdown.Name = "BasesDropdown"
+basesDropdown.Size = UDim2.new(1, 0, 0, 30)
+basesDropdown.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+basesDropdown.BorderSizePixel = 0
+basesDropdown.ZIndex = 2
+
+local basesCorner = Instance.new("UICorner")
+basesCorner.CornerRadius = UDim.new(0, 4)
+basesCorner.Parent = basesDropdown
+
+local basesButton = Instance.new("TextButton")
+basesButton.Name = "BasesButton"
+basesButton.Size = UDim2.new(1, 0, 1, 0)
+basesButton.BackgroundTransparency = 1
+basesButton.Text = "Select Base"
+basesButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+basesButton.Font = Enum.Font.Gotham
+basesButton.TextSize = 12
+basesButton.ZIndex = 3
+
+local basesScroll = Instance.new("ScrollingFrame")
+basesScroll.Name = "BasesScroll"
+basesScroll.Size = UDim2.new(1, 0, 0, 120)
+basesScroll.Position = UDim2.new(0, 0, 1, 2)
+basesScroll.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+basesScroll.BorderSizePixel = 0
+basesScroll.ScrollBarThickness = 4
+basesScroll.Visible = false
+basesScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+basesScroll.ZIndex = 4
+
+local basesLayout = Instance.new("UIListLayout")
+basesLayout.Parent = basesScroll
+
+local charsDropdown = Instance.new("Frame")
+charsDropdown.Name = "CharsDropdown"
+charsDropdown.Size = UDim2.new(1, 0, 0, 30)
+charsDropdown.Position = UDim2.new(0, 0, 0, 40)
+charsDropdown.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+charsDropdown.BorderSizePixel = 0
+charsDropdown.ZIndex = 2
+
+local charsCorner = Instance.new("UICorner")
+charsCorner.CornerRadius = UDim.new(0, 4)
+charsCorner.Parent = charsDropdown
+
+local charsButton = Instance.new("TextButton")
+charsButton.Name = "CharsButton"
+charsButton.Size = UDim2.new(1, 0, 1, 0)
+charsButton.BackgroundTransparency = 1
+charsButton.Text = "Select Character"
+charsButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+charsButton.Font = Enum.Font.Gotham
+charsButton.TextSize = 12
+charsButton.ZIndex = 3
+
+local charsScroll = Instance.new("ScrollingFrame")
+charsScroll.Name = "CharsScroll"
+charsScroll.Size = UDim2.new(1, 0, 0, 120)
+charsScroll.Position = UDim2.new(0, 0, 1, 2)
+charsScroll.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+charsScroll.BorderSizePixel = 0
+charsScroll.ScrollBarThickness = 4
+charsScroll.Visible = false
+charsScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+charsScroll.ZIndex = 4
+
+local charsLayout = Instance.new("UIListLayout")
+charsLayout.Parent = charsScroll
+
+local actionButton = Instance.new("TextButton")
+actionButton.Name = "ActionButton"
+actionButton.Size = UDim2.new(1, 0, 0, 40)
+actionButton.Position = UDim2.new(0, 0, 0, 80)
+actionButton.BackgroundColor3 = Color3.fromRGB(80, 120, 255)
+actionButton.BorderSizePixel = 0
+actionButton.Text = "Steal"
+actionButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+actionButton.Font = Enum.Font.Gotham
+actionButton.TextSize = 14
+actionButton.ZIndex = 1
+
+local actionCorner = Instance.new("UICorner")
+actionCorner.CornerRadius = UDim.new(0, 4)
+actionCorner.Parent = actionButton
+
+titleBar.Parent = mainFrame
+titleLabel.Parent = titleBar
+closeButton.Parent = titleBar
+contentFrame.Parent = mainFrame
+
+basesDropdown.Parent = contentFrame
+basesButton.Parent = basesDropdown
+basesScroll.Parent = basesDropdown
+
+charsDropdown.Parent = contentFrame
+charsButton.Parent = charsDropdown
+charsScroll.Parent = charsDropdown
+
+actionButton.Parent = contentFrame
+
+mainFrame.Parent = screenGui
+screenGui.Parent = game:GetService("CoreGui")
+
+-- Floating bubble button
+local floatingBall = Instance.new("ImageButton")
+floatingBall.Name = "FloatingBall"
+floatingBall.Size = UDim2.new(0, 52, 0, 52)
+floatingBall.Position = UDim2.new(1, -70, 1, -90) -- bottom-right
+floatingBall.BackgroundColor3 = Color3.fromRGB(80, 120, 255)
+floatingBall.BorderSizePixel = 0
+floatingBall.AutoButtonColor = true
+floatingBall.Visible = false
+floatingBall.ZIndex = 999
+floatingBall.Image = "" -- keep empty or set an icon asset id
+
+local ballCorner = Instance.new("UICorner")
+ballCorner.CornerRadius = UDim.new(1, 0)
+ballCorner.Parent = floatingBall
+
+local ballStroke = Instance.new("UIStroke")
+ballStroke.Thickness = 2
+ballStroke.Color = Color3.fromRGB(255, 255, 255)
+ballStroke.Transparency = 0.6
+ballStroke.Parent = floatingBall
+
+floatingBall.Parent = screenGui
+
+-- Bubble drag
+local ballDragging = false
+local ballDragInput, ballDragStart, ballStartPos
+
+local function updateBall(input)
+	local delta = input.Position - ballDragStart
+	floatingBall.Position = UDim2.new(
+		ballStartPos.X.Scale, ballStartPos.X.Offset + delta.X,
+		ballStartPos.Y.Scale, ballStartPos.Y.Offset + delta.Y
+	)
+end
+
+floatingBall.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		ballDragging = true
+		ballDragStart = input.Position
+		ballStartPos = floatingBall.Position
+
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				ballDragging = false
+			end
+		end)
+	end
+end)
+
+floatingBall.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement then
+		ballDragInput = input
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if input == ballDragInput and ballDragging then
+		updateBall(input)
+	end
+end)
+
+-- Make main UI feel like a floating window
+screenGui.IgnoreGuiInset = true
+mainFrame.Active = true
+titleBar.Active = true
+
 local function getAllPlayerBases()
     local bases = {}
     
@@ -283,6 +299,8 @@ end
 
 local selectedBase = nil
 local selectedCharacter = nil
+local basesOpen = false
+local charsOpen = false
 local autoUpdateConnection = nil
 
 local function startAutoUpdate()
@@ -292,8 +310,12 @@ local function startAutoUpdate()
     
     autoUpdateConnection = RunService.Heartbeat:Connect(function()
         wait(2)
-        updateBasesList()
-        if selectedBase then
+        
+        if basesOpen then
+            updateBasesList()
+        end
+        
+        if charsOpen and selectedBase then
             updateCharactersList()
         end
     end)
@@ -306,27 +328,137 @@ local function stopAutoUpdate()
     end
 end
 
-local function updateBasesList()
-    local bases = getAllPlayerBases()
-    local baseOptions = {}
-    for _, baseInfo in ipairs(bases) do
-        table.insert(baseOptions, baseInfo.PlayerName .. "'s Base")
-    end
-    BasesDropdown:Refresh(baseOptions, true)
-end
-
 local function updateCharactersList()
+    charsScroll:ClearAllChildren()
+    
     if not selectedBase then
-        CharsDropdown:Refresh({}, true)
+        charsButton.Text = "Select Character"
         return
     end
+    
     local characters = getCharactersFromBase(selectedBase)
-    local charOptions = {}
-    for _, charInfo in ipairs(characters) do
-        table.insert(charOptions, charInfo.Name .. " (" .. charInfo.Folder .. ")")
+    local ySize = 0
+    
+    for i, charInfo in ipairs(characters) do
+        local charButton = Instance.new("TextButton")
+        charButton.Name = "Char_" .. charInfo.Name
+        charButton.Size = UDim2.new(1, 0, 0, 30)
+        charButton.Position = UDim2.new(0, 0, 0, (i-1)*30)
+        charButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+        charButton.BorderSizePixel = 0
+        charButton.Text = charInfo.Name .. " (" .. charInfo.Folder .. ")"
+        charButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        charButton.Font = Enum.Font.Gotham
+        charButton.TextSize = 11
+        charButton.ZIndex = 5
+        
+        charButton.MouseButton1Click:Connect(function()
+            selectedCharacter = charInfo.Character
+            charsButton.Text = charInfo.Name .. " (" .. charInfo.Folder .. ")"
+            charsScroll.Visible = false
+            charsOpen = false
+        end)
+        
+        charButton.Parent = charsScroll
+        ySize = ySize + 30
     end
-    CharsDropdown:Refresh(charOptions, true)
+    
+    charsScroll.CanvasSize = UDim2.new(0, 0, 0, ySize)
 end
+
+local function updateBasesList()
+    basesScroll:ClearAllChildren()
+    
+    local bases = getAllPlayerBases()
+    local ySize = 0
+    
+    for i, baseInfo in ipairs(bases) do
+        local baseButton = Instance.new("TextButton")
+        baseButton.Name = "Base_" .. baseInfo.BaseName
+        baseButton.Size = UDim2.new(1, 0, 0, 30)
+        baseButton.Position = UDim2.new(0, 0, 0, (i-1)*30)
+        baseButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+        baseButton.BorderSizePixel = 0
+        baseButton.Text = baseInfo.PlayerName .. "'s Base"
+        baseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        baseButton.Font = Enum.Font.Gotham
+        baseButton.TextSize = 11
+        baseButton.ZIndex = 5
+        
+        baseButton.MouseButton1Click:Connect(function()
+            selectedBase = baseInfo.Base
+            basesButton.Text = baseInfo.PlayerName .. "'s Base"
+            basesScroll.Visible = false
+            basesOpen = false
+            
+            updateCharactersList()
+        end)
+        
+        baseButton.Parent = basesScroll
+        ySize = ySize + 30
+    end
+    
+    basesScroll.CanvasSize = UDim2.new(0, 0, 0, ySize)
+end
+
+local dragging = false
+local dragInput, dragStart, startPos
+
+local function update(input)
+    local delta = input.Position - dragStart
+    mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+        
+        connections.drag = input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+titleBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        update(input)
+    end
+end)
+
+basesButton.MouseButton1Click:Connect(function()
+    basesOpen = not basesOpen
+    basesScroll.Visible = basesOpen
+    
+    if basesOpen then
+        charsScroll.Visible = false
+        charsOpen = false
+        updateBasesList()
+    end
+end)
+
+
+charsButton.MouseButton1Click:Connect(function()
+    if selectedBase then
+        charsOpen = not charsOpen
+        charsScroll.Visible = charsOpen
+        
+        if charsOpen then
+            basesScroll.Visible = false
+            basesOpen = false
+            updateCharactersList()
+        end
+    end
+end)
 
 local function findPlayerBase()
     for baseName, base in pairs(workspace.Bases:GetChildren()) do
@@ -349,6 +481,212 @@ local function findPlayerBase()
     return nil
 end
 
+actionButton.MouseButton1Click:Connect(function()
+    if selectedBase and selectedCharacter then
+        print("Base:", selectedBase.Name)
+        print("Character:", selectedCharacter.Name)
+        
+        local localChar = localPlayer.Character
+        if not localChar then
+            localChar = localPlayer.CharacterAdded:Wait()
+        end
+        local localHum = localChar:WaitForChild("Humanoid")
+        local localHRP = localChar:WaitForChild("HumanoidRootPart")
+        
+        local targetHRP = selectedCharacter:FindFirstChild("HumanoidRootPart")
+        
+        if not targetHRP then
+            return
+        end
+        
+        local function enableNoclip()
+            local noclipConnection
+            noclipConnection = RunService.Stepped:Connect(function()
+                if localChar and localHum then
+                    for _, part in pairs(localChar:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            part.CanCollide = false
+                        end
+                    end
+                else
+                    noclipConnection:Disconnect()
+                end
+            end)
+            return noclipConnection
+        end
+        
+        local function disableMovement()
+            localHum.PlatformStand = true
+        end
+        
+        local function enableFlying()
+            local bodyGyro = Instance.new("BodyGyro")
+            bodyGyro.MaxTorque = Vector3.new(400000, 400000, 400000)
+            bodyGyro.P = 10000
+            bodyGyro.D = 500
+            bodyGyro.CFrame = localHRP.CFrame
+            bodyGyro.Parent = localHRP
+            
+            local bodyVelocity = Instance.new("BodyVelocity")
+            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            bodyVelocity.MaxForce = Vector3.new(400000, 400000, 400000)
+            bodyVelocity.Parent = localHRP
+            
+
+            local flyConnection
+            flyConnection = RunService.Heartbeat:Connect(function()
+                if localChar and localHRP then
+                    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+                    
+                    local lookAtTarget = CFrame.lookAt(localHRP.Position, targetHRP.Position)
+                    local rotatedCFrame = lookAtTarget * CFrame.Angles(math.rad(-90), 0, 0)
+                    bodyGyro.CFrame = rotatedCFrame
+                else
+                    flyConnection:Disconnect()
+                end
+            end)
+            
+            return bodyGyro, bodyVelocity, flyConnection
+        end
+        
+
+        local function disableAll(bodyGyro, bodyVelocity, flyConnection, noclipConnection)
+            if bodyGyro then
+                bodyGyro:Destroy()
+            end
+            if bodyVelocity then
+                bodyVelocity:Destroy()
+            end
+            if flyConnection then
+                flyConnection:Disconnect()
+            end
+            if noclipConnection then
+                noclipConnection:Disconnect()
+            end
+            if localHum then
+                localHum.PlatformStand = false
+            end
+
+            if localChar then
+                for _, part in pairs(localChar:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = true
+                    end
+                end
+            end
+        end
+
+        local function findLocalBase()
+            for baseName, base in pairs(workspace.Bases:GetChildren()) do
+                local sign = base:FindFirstChild("Sign")
+                if sign then
+                    local signPart = sign:FindFirstChild("SignPart")
+                    if signPart then
+                        local surfaceGui = signPart:FindFirstChild("SurfaceGui")
+                        if surfaceGui then
+                            local textLabel = surfaceGui:FindFirstChild("TextLabel")
+                            if textLabel and textLabel.Text then
+                                if string.find(textLabel.Text, localPlayer.Name .. "'s Base") then
+                                    return base
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            return nil
+        end
+        
+        local noclipConnection = enableNoclip()
+        disableMovement()
+        
+        local backOffset = targetHRP.CFrame.lookVector * -6
+        localHRP.CFrame = targetHRP.CFrame + backOffset + Vector3.new(0, 3, 0)
+        
+        local bodyGyro, bodyVelocity, flyConnection = enableFlying()
+        
+        local maxWaitTime = 6 
+        local startTime = tick()
+        
+        while tick() - startTime < maxWaitTime do
+           
+            if selectedCharacter:GetAttribute("Stolen") == true then
+                break
+            end
+            wait(0.1)
+        end
+        
+        local localBase = findLocalBase()
+        if localBase and localBase:FindFirstChild("StealCollect2") then
+            local stealCollect = localBase.StealCollect2
+            if stealCollect:IsA("Part") then
+                localHRP.CFrame = stealCollect.CFrame + Vector3.new(0, 3, 0)
+            end
+        end
+        
+        disableAll(bodyGyro, bodyVelocity, flyConnection, noclipConnection)
+        
+    else
+        print("Select an Base and Char")
+    end
+end)
+
+local function findPlayerBase()
+    if not workspace:FindFirstChild("Bases") then
+        return nil
+    end
+    
+    for baseName, base in pairs(workspace.Bases:GetChildren()) do
+        local sign = base:FindFirstChild("Sign")
+        if sign then
+            local signPart = sign:FindFirstChild("SignPart")
+            if signPart then
+                local surfaceGui = signPart:FindFirstChild("SurfaceGui")
+                if surfaceGui then
+                    local textLabel = surfaceGui:FindFirstChild("TextLabel")
+                    if textLabel and textLabel.Text then
+                        if string.find(textLabel.Text, localPlayer.Name .. "'s Base") then
+                            return base
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+closeButton.MouseButton1Click:Connect(function()
+    mainFrame.Visible = false
+    floatingBall.Visible = true
+    closeAllDropdowns()
+end)
+
+floatingBall.MouseButton1Click:Connect(function()
+    floatingBall.Visible = false
+    mainFrame.Visible = true
+end)
+
+local function closeAllDropdowns()
+    basesScroll.Visible = false
+    charsScroll.Visible = false
+    basesOpen = false
+    charsOpen = false
+end
+
+UserInputService.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        local mousePos = UserInputService:GetMouseLocation()
+        local guiPos = mainFrame.AbsolutePosition
+        local guiSize = mainFrame.AbsoluteSize
+        
+        if not (mousePos.X >= guiPos.X and mousePos.X <= guiPos.X + guiSize.X and
+               mousePos.Y >= guiPos.Y and mousePos.Y <= guiPos.Y + guiSize.Y) then
+            closeAllDropdowns()
+        end
+    end
+end)
+
 local function bypassAC()
     local AC1 = localPlayer.PlayerScripts:FindFirstChild("Testing1")
     local AC2 = localPlayer.PlayerScripts:FindFirstChild("Testing2")
@@ -361,92 +699,8 @@ local function bypassAC()
     end
 end
 
--- Custom Floating Ball (Minimize Feature)
--- Rayfield doesn't have built-in minimize to ball, so we create a custom one
-local screenGui = Instance.new("ScreenGui")
-screenGui.Parent = game:GetService("CoreGui")
-screenGui.Name = "MinimizeBallGui"
-
-local floatingBall = Instance.new("ImageButton")
-floatingBall.Name = "FloatingBall"
-floatingBall.Size = UDim2.new(0, 52, 0, 52)
-floatingBall.Position = UDim2.new(1, -70, 1, -90)
-floatingBall.BackgroundColor3 = Color3.fromRGB(80, 120, 255)
-floatingBall.BorderSizePixel = 0
-floatingBall.Visible = false
-floatingBall.ZIndex = 999
-floatingBall.Parent = screenGui
-
-local ballCorner = Instance.new("UICorner")
-ballCorner.CornerRadius = UDim.new(1, 0)
-ballCorner.Parent = floatingBall
-
-local ballStroke = Instance.new("UIStroke")
-ballStroke.Thickness = 2
-ballStroke.Color = Color3.fromRGB(255, 255, 255)
-ballStroke.Transparency = 0.6
-ballStroke.Parent = floatingBall
-
--- Ball Drag with Edge Snapping
-local ballDragging = false
-local ballDragInput, ballDragStart, ballStartPos
-
-local function updateBall(input)
-    local delta = input.Position - ballDragStart
-    local newPos = UDim2.new(
-        ballStartPos.X.Scale, ballStartPos.X.Offset + delta.X,
-        ballStartPos.Y.Scale, ballStartPos.Y.Offset + delta.Y
-    )
-    
-    -- Simple edge snapping
-    local viewport = workspace.CurrentCamera.ViewportSize
-    local absPos = floatingBall.AbsolutePosition + delta
-    if absPos.X < 20 then newPos = UDim2.new(0, 0, newPos.Y.Scale, newPos.Y.Offset) end
-    if absPos.X > viewport.X - 72 then newPos = UDim2.new(1, -52, newPos.Y.Scale, newPos.Y.Offset) end
-    if absPos.Y < 20 then newPos = UDim2.new(newPos.X.Scale, newPos.X.Offset, 0, 0) end
-    if absPos.Y > viewport.Y - 72 then newPos = UDim2.new(newPos.X.Scale, newPos.X.Offset, 1, -52) end
-    
-    floatingBall.Position = newPos
-end
-
-floatingBall.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        ballDragging = true
-        ballDragStart = input.Position
-        ballStartPos = floatingBall.Position
-    end
-end)
-
-floatingBall.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement then
-        ballDragInput = input
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if input == ballDragInput and ballDragging then
-        updateBall(input)
-    end
-end)
-
--- Minimize/Reopen Logic (Rayfield has a close event hook)
--- Assuming Rayfield has a way to detect close; if not, add a custom button
-local CloseButton = MainTab:CreateButton({
-    Name = "Close (Minimize)",
-    Callback = function()
-        Window:Hide() -- Hide Rayfield window
-        floatingBall.Visible = true
-    end
-})
-
-floatingBall.MouseButton1Click:Connect(function()
-    floatingBall.Visible = false
-    Window:Show() -- Show Rayfield window
-end)
-
--- Initialize
 updateBasesList()
 startAutoUpdate()
 bypassAC()
 
-print("GUI Loaded with Rayfield")
+print("GUI Loaded")
